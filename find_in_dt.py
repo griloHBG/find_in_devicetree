@@ -176,7 +176,13 @@ def find_in_dt(dts_file_path:Path, search_string_list):# -> tuple[MyRepository, 
     print(dts_file_path)
 
     repo = MyRepository(linux_git, arch)
-    print('active git branch:',color(repo.active_branch(), Colors.red), '\n')
+    try:
+        print('active git branch:',color(repo.active_branch(), Colors.red), '\n')
+    except TypeError as e:
+        print('active git branch:',color("no branch found", Colors.red), '\n')
+    except e:
+        raise e
+
 
     include_dir = Path(linux_git.working_dir) / 'include'
     try:
