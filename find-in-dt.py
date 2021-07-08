@@ -1,7 +1,7 @@
 #! /bin/python3
 
 '''
-This script supports both arm and arm64 architectures.
+This script supports both arm and arm64 architectures. Dependency: GitPython (https://gitpython.readthedocs.io/en/stable/intro.html)
 
 This script should run inside a valid Linux git (like the linux-toradex)
 
@@ -19,23 +19,66 @@ or
 
 '''
 
-#TODO: get dt-bindings includes from kernel/include/dt-bindings regardless of using "" or <> for these includes
 import os
+from typing import List
+
 from git import Repo, InvalidGitRepositoryError
 from pathlib import Path
 import re
 from colorit import *
 import sys
 
-def get_all_includes(device_tree_filename, include_dir):
+class MyRepository:
+    def __init__(self, repo:Repo , arch:str='arm'):
+        self._arch = arch
+        self._repo = repo
 
-    device_tree_path = (device_tree_filename).resolve()
+    def arch(self):
+        return self._arch
+
+    def active_branch(self):
+        return self._repo.active_branch
+
+class SearchHit:
+    def __init__(self, file_name:Path):#, line_number:int, before_hit:str, hit:str, after_hit:str):
+        self.file_name = file_name
+        self.line_number = []
+        self.before_hit = []
+        self.hit = []
+        self.after_hit = []
+        self.hit_start = []
+        self.hit_end = []
+
+    def to_dict(self):
+        return {'file_name': self.file_name,
+                'hits':{line_number:[before, hit, after, hit_start, hit_end]
+                        for line_number, before, hit, after, hit_start, hit_end
+                        in zip(self.line_number, self.before_hit, self.hit, self.after_hit, self.hit_start, self.hit_end)}
+                }
+
+    def append(self, line_number:int, before_hit:str, hit:str, after_hit:str, hit_start:int, hit_end:int):
+        self.line_number.append(line_number)
+        self.before_hit.append(before_hit)
+        self.hit.append(hit)
+        self.after_hit.append(after_hit)
+        self.hit_start.append(hit_start)
+        self.hit_end.append(hit_end)
+
+def get_all_includes(dts_file_path, include_dir, dts_path):
+
+    if not include_dir.exists() or not include_dir.is_dir():
+        raise LookupError(f'Include directory {include_dir} doesn\'t exist or isn\'t a file!')
+
+    dts_file_path = dts_file_path.resolve()
+    dts_folder = dts_file_path.parent
 
     device_tree_content = None
 
-    if device_tree_path.exists() and device_tree_path.is_file():
-        with open(device_tree_path) as dt:
+    if dts_file_path.exists() and dts_file_path.is_file():
+        with open(dts_file_path) as dt:
             device_tree_content = dt.read()
+    else:
+        raise LookupError(f'Device Tree file {dts_file_path} doesn\'t exist or isn\'t a file!')
 
     dts_path_list = []
     dts_file_list = []
@@ -46,141 +89,167 @@ def get_all_includes(device_tree_filename, include_dir):
         if f[-1] == 'h':
             if not f in include_file_list:
                 include_file_list.append(f)
-                search = re.search("pinfunc", f, re.IGNORECASE)
-                if search: # pinfunc headers are within the same folder as dts files
-                    include_path_list.append(dts_path / f)
-                else: # non pinfunc are in linux-kernel/include/dt-bindings
+                #search = re.search("pinfunc", f, re.IGNORECASE)
+                #if search: # pinfunc headers are within the same folder as dts files
+                #    include_path_list.append(dts_path / f)
+                #else: # non pinfunc are in linux-kernel/include/dt-bindings
+                #    include_path_list.append(include_dir / f)
+                if (include_dir / f).exists():
                     include_path_list.append(include_dir / f)
+                elif (dts_path / f).exists():
+                    include_path_list.append(dts_path / f)
+                elif dts_folder != include_dir and dts_folder != dts_path and (dts_folder / f).exists():
+                    include_path_list.append(dts_folder / f)
+                else:
+                    raise LookupError()
 
         else:
             if not f in dts_file_list:
                 dts_file_list.append(f)
                 dts_path_list.append(dts_path / f)
 
-
-    #for include_filename, include_path in zip(include_file_list, include_path_list):
-    #    print(include_filename, ' : ', include_path)
-
-    #for f in re.findall('#include <(.+)>', device_tree_content):
-    #    if f[-1] == 'h':
-    #        if not f in include_file_list:
-    #            include_file_list.append(f)
-    #            include_path_list.append(include_dir / f)
-    #    else:
-    #        if not f in dts_file_list:
-    #            dts_file_list.append(f)
-    #            dts_path_list.append(include_dir / f)
-
-    #for dt_filename, dt_path in zip(dts_file_list, dts_path_list):
-    #    print(dt_filename, ' : ', dt_path)
-    
     return dts_path_list, include_path_list
 
-if __name__ == '__main__':
-
-    linux_git_path = Path.cwd()
-
-    arch = ''
-
-    search = re.search(r'arch/([\w\d]+)',str(linux_git_path))
-    if search:
-        arch = search.group(1)
+def get_repository(file:Path):
+    path = None
+    if file.is_file():
+        path = file.parent
     else:
-        print(f'\nYou are in {linux_git_path}, which doesn\'t define an architecture. Please cd into one of architecture folders.')
-        exit(0);
-
-    linux_toradex_git = None
+        path = file
 
     try:
-        linux_toradex_git = Repo(linux_git_path)
-        print('git at:',linux_git_path)
+        git = Repo(path)
+        print('git found at:', path)
     except InvalidGitRepositoryError:
         try_level_above = True
         while try_level_above:
-            linux_git_path = linux_git_path.parent
+            path = path.resolve().parent
             try:
-                linux_toradex_git = Repo(linux_git_path)
+                git = Repo(path)
                 try_level_above = False
-                linux_git_path = linux_git_path.resolve()
-                print('git found at:',linux_git_path.resolve())
+                path = path.resolve()
+                print('git found at:', path.resolve())
             except InvalidGitRepositoryError:
+                if str(path) == '/':
+                    raise LookupError(f'This directory {path} doesn\'t belong to a Git repository.')
                 try_level_above = True
-        
-    include_dir = linux_git_path / 'include'
-    dts_path = linux_git_path / 'arch' / arch / 'boot' / 'dts'
 
-    if arch == 'arm64':
-        dts_path = dts_path / 'freescale'
+    return git
 
-    active_branch = linux_toradex_git.active_branch
 
-    print('active git branch:',color(active_branch, Colors.red), '\n')
+def get_architecture(dts_file_path:Path):
 
-    all_dts = []
-    all_includes = []
+    arch = ''
+    search = re.search(r'arch/([\w\d]+)', str(dts_file_path))
+    if search:
+        arch = search.group(1)
+    else:
+        raise LookupError(f'\nYou are in {dts_file_path}, which doesn\'t define an architecture. Please cd into a dts folder.')
 
-    dt_end = sys.argv[1] # 'imx6dl-colibri-eval-v3.dts'
-    dt_filepath = dts_path / dt_end
+    return arch
 
-    if not dt_filepath.exists():
-        print('device tree file does not exits:', dt_filepath)
-        exit(0)
+def find_in_dt(dts_file_path:Path, search_string_list):# -> tuple[MyRepository, List[SearchHit]]:
 
-    search_string_list = sys.argv[2:] # ['gpio2', 'MX6QDL_PAD_SD1_DAT']
+    linux_git = None
+
+    if not dts_file_path.is_absolute():
+        dts_file_path = dts_file_path.absolute()
+
+    if not dts_file_path.exists():
+        raise LookupError(f'File {dts_file_path} doesn\'t exists!')
 
     try:
-        more_dts, more_includes = get_all_includes(dt_filepath, include_dir)
-    except:
-        print('Error!')
-        exit(0)
+        linux_git = get_repository(dts_file_path)
+    except LookupError as e:
+        raise e
+
+    dts_folder = dts_file_path.parent
+
+    try:
+        arch = get_architecture(dts_file_path)
+    except LookupError as e:
+        raise e
+
+    if not dts_file_path.exists():
+        raise LookupError(f'device tree file does not exits: {dts_file_path}')
+
+    print(dts_file_path)
+
+    repo = MyRepository(linux_git, arch)
+    print('active git branch:',color(repo.active_branch(), Colors.red), '\n')
+
+    include_dir = Path(linux_git.working_dir) / 'include'
+    try:
+        more_dts, more_headers = get_all_includes(dts_file_path, include_dir, dts_folder)
+    except LookupError as e:
+        raise e
 
     all_dts = more_dts
-    all_includes = more_includes
+    all_headers = more_headers
 
     for dts in all_dts:
-        dts_s, include_s = get_all_includes(dts, include_dir)
+        dts_s, include_s = get_all_includes(dts, include_dir, dts_folder)
         for d in dts_s:
             if d not in all_dts:
                 all_dts.append(d)
         for i in include_s:
-            if i not in all_includes:
-                all_includes.append(i)
+            if i not in all_headers:
+                all_headers.append(i)
 
-    all_dts.append(dt_filepath)
+    for header in all_headers:
+        dts_s, include_s = get_all_includes(header, include_dir, dts_folder)
+        for d in dts_s:
+            if d not in all_dts:
+                all_dts.append(d)
+        for i in include_s:
+            if i not in all_headers:
+                all_headers.append(i)
 
-    print('searching in:')
-    for file in [*all_dts, *all_includes]:
-        print('\t{}/{}'.format(file.parents[0],color(file.name,Colors.green)))
+    all_dts.append(dts_file_path)
 
-    print()
-
-    finds = {}
-    for file in [*all_dts, *all_includes]:
+    finds = []
+    searched_files = [*all_headers, *all_dts]
+    for file in searched_files:
         with open(file) as f:
             content_lines = f.readlines()
-            
-            finds[file] = []
-            for idx, line in enumerate(content_lines):
+
+            new_search_hit = SearchHit(file)
+            something_found = False
+            character_sum = 0
+            for line_number, line_text in enumerate(content_lines):
                 for ss in search_string_list:
                     #TODO: findall aqui? achar mais de uma vez a mesma coisa na mesma linha?!
-                    search = re.search(ss, line, re.IGNORECASE)
+                    search = re.search(ss, line_text, re.IGNORECASE)
                     if search:
-                        finds[file].append((idx+1, line[:-1], search.span()))
+                        something_found = True
+                        span = search.span()
+                        new_search_hit.append(line_number+1, line_text[0:span[0]], line_text[span[0]:span[1]], line_text[span[1]:].rstrip(), character_sum+span[0], character_sum+span[1])
+                character_sum += len(line_text)
+            if something_found:
+                finds.append(new_search_hit)
+
+    return finds, searched_files
+
+
+if __name__ == '__main__':
+
+    dt_file = sys.argv[1] # 'imx6dl-colibri-eval-v3.dts'
+    search_string_list = sys.argv[2:] # ['gpio2', 'MX6QDL_PAD_SD1_DAT']
+
+    finds, searched_files = find_in_dt(Path(dt_file), search_string_list)
+
+    print('searching in:')
+    for file in searched_files:
+        print('\t{}/{}'.format(file.parents[0],color(file.name,Colors.green)))
 
     print('findings:')
 
     for f in finds:
-        #if not finds[f] == []:
-        if finds[f]:
-            print(color(f,Colors.purple))
-            for idx, line, span in finds[f]:
-                if span[0] == 0:
-                    print('\t',color(idx,Colors.red),' : ', color(line[span[0]:span[1]],Colors.green), line[span[1]:], sep='')
-                elif span[1] == len(line):
-                    print('\t',color(idx,Colors.red),' : ', line[0:span[0]], color(line[span[0]:span[1]],Colors.green), sep='')
-                else:
-                    print('\t',color(idx,Colors.red),' : ', line[0:span[0]], color(line[span[0]:span[1]],Colors.green), line[span[1]:], sep='')
-            print()
+        print(color(f.file_name,Colors.purple))
+        for line, [before, hit, after, hit_start, hit_end] in f.to_dict()['hits'].items():
+            print('\t',color(line, Colors.red),' : ', before, color(hit,Colors.green), after, sep='')
+        print()
+
 
 
 #for file in [*dts_path_list, *include_file_list]:
