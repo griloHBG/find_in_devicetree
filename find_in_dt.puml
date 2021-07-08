@@ -1,0 +1,51 @@
+@startuml
+help themes
+@enduml
+
+
+@startuml
+!theme sandstone
+'https://plantuml.com/activity-diagram-beta
+
+title find_in_dt
+start
+floating note left: arguments are:\n**dts_file_path**:Path\n**search_string_list**:List[str]
+if(**dts_file_path** gives\nis in a git repository?) then (no: LookupError)
+    stop
+else (yes)
+    if(**dts_file_path** gives\n   the architecture?) then (no: LookupError)
+        stop
+    else (yes)
+        :creates **MyRepository** instance\n    from git and architecture;
+        :get kernel's\n**include_dir** Path;
+        if(**get_all_includes** to\n get all .dtsi/.h\nfile runs fine?) then (no: LookupError)
+            stop
+        else (yes)
+            :store all included dtsi in **all_dts**;
+            :store all included h in **all_includes**;
+            while (for each\n.dts/.dtsi/.h\nfile included)
+                if(**get_all_includes** to\n get all .dtsi/.h\nfile runs fine?) then (no: LookupError)
+                    stop
+                endif
+                :append its includes to\n**all_headers** or to **all_dts**;
+            endwhile
+            :append the current **dts_file_path** to **all_dts**;
+            :join **all_headers** and **all_headers**\n   to one huge **searched_files** list;
+            while (for each file in\n**searched_files**)
+                :get its content;
+                while (for each line of the file)
+                    while (for each search string\nof **search_string_list**)
+                        if(search inside line for\n   the search string) then (found)
+                            :store:\nline number,\nline text before the hit,\nthe hit string,\nline text after the hit,\nwhole text index of the start of the hit,\nwhole text index of the end of the hit;
+                            else (not\nfound)
+                        endif
+                    endwhile
+                endwhile
+            endwhile
+        endif
+    endif
+endif
+:return the findings and all the\n   files that were searched in;
+stop
+
+@enduml

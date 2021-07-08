@@ -1,0 +1,14 @@
+@startuml
+!theme sandstone
+'https://plantuml.com/activity-diagram-beta
+
+title How to call find_in_dt
+start
+:Get first argument\n   **dts_file_path**;
+floating note left: ex: /linux-git/path/to/file.dts
+:Each other argument\n   is a search string\n**search_string_list**;
+floating note left: ex: gpio spi
+:find_in_dt;
+stop
+
+@enduml
