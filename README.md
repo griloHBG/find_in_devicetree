@@ -3,8 +3,8 @@
 ## Dependencies
 
 Python packages:
-- colorit
-- gitpython
+- colorit (`python3 -m pip install color-it`)
+- gitpython (`python3  -m pip install gitpython`)
 
 ## Overview
 ![img.png](images/top-view-find_in_dt.png)
