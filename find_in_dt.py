@@ -155,7 +155,29 @@ def get_architecture(dts_file_path: Path):
 
     return arch
 
-def find_in_dt(dts_file_path:Path, search_string_list):# -> tuple[MyRepository, List[SearchHit]]:
+
+def find_in_dt(dts_file_path: Path, search_string_list: List[str], search_in='all',
+               returning='all'):  # -> tuple[MyRepository, List[SearchHit]]:
+    '''
+
+    :param dts_file_path: path to the device tree source (.dts) file
+    :type dts_file_path: Path
+    :param search_string_list: list of strings to search for
+    :type search_string_list: List[str]
+    :param search_in: where to search in. 'all' for everywhere, 'headers' t search only amongst headers, 'dts' to search only amonst dts and dtsi files
+    :type search_in: str
+    :param returning: what to be returned. 'all' to return everything (list of files and list of hits),  'only_matches' to return only the search hits and no file list, 'only_files' to return only the path to the files involved in given device tree (this option disregars the search_in option and disables the search)
+    :type returning: str
+    :return: depends on search_in and returning arguments, but can have list of SearchHits and list of all files involved in given device tree
+    :rtype: Tuple[List[SearchHit], List[Path]]
+    '''
+
+    if not search_in in ["all", "only_headers", "only_dts"]:
+        raise ValueError(f'ERROR: search_in should be "all", "only_headers", or "only_dts". Got "{search_in}" instead.')
+
+    if not returning in ["all", "only_matches", "only_files"]:
+        raise ValueError(
+            f'ERROR: returning should be "all", "only_matches", or "only_files". Got "{returning}" instead.')
 
     linux_git = None
 
@@ -219,11 +241,23 @@ def find_in_dt(dts_file_path:Path, search_string_list):# -> tuple[MyRepository, 
 
     all_dts.append(dts_file_path)
 
-    finds = []
-    searched_files = [*all_headers, *all_dts]
-    for file in searched_files:
-        with open(file) as f:
-            content_lines = f.readlines()
+    finds: List[SearchHit] = []
+
+    all_files: List[Path] = [*all_headers, *all_dts]
+
+    if search_in == 'only_headers':
+        search_in_files:List[Path] = all_headers
+    elif search_in == 'only_dts':
+        search_in_files:List[Path] = all_dts
+    elif search_in == 'all':
+        search_in_files:List[Path] = all_files
+    else:
+        search_in_files:List[Path] = []
+
+    if not returning == 'only_files':
+        for file in search_in_files:
+            with open(file) as f:
+                content_lines = f.readlines()
 
                 new_search_hit = SearchHit(file)
                 something_found = False
@@ -242,7 +276,10 @@ def find_in_dt(dts_file_path:Path, search_string_list):# -> tuple[MyRepository, 
                 if something_found:
                     finds.append(new_search_hit)
 
-    return finds, searched_files
+    if returning == 'only_matches':
+        search_in_files:List[Path] = []
+
+    return finds, search_in_files
 
 
 if __name__ == '__main__':
@@ -252,21 +289,30 @@ if __name__ == '__main__':
     dt_file = sys.argv[1]  # 'imx6dl-colibri-eval-v3.dts'
     search_string_list = sys.argv[2:]  # ['gpio2', 'MX6QDL_PAD_SD1_DAT']
 
-    finds, searched_files = find_in_dt(Path(dt_file), search_string_list)
+    search_in = ['only_headers', 'only_dts', 'all']
+    returning = ['only_files', 'only_matches', 'all']
 
-    print('searching in:')
-    for file in searched_files:
-        print('\t{}/{}'.format(file.parents[0],color(file.name,Colors.green)))
+    for si in search_in:
+        for ret in returning:
 
-    print('findings:')
+            print(color(f'search_in: {si}, returning: {ret}', Colors.yellow))
 
-    for f in finds:
-        print(color(f.file_name,Colors.purple))
-        for line, [before, hit, after, hit_start, hit_end] in f.to_dict()['hits'].items():
-            print('\t',color(line, Colors.red),' : ', before, color(hit,Colors.green), after, sep='')
-        print()
+            finds, searched_files = find_in_dt(Path(dt_file), search_string_list, search_in=si, returning=ret)
 
+            print('searching in:')
+            for file in searched_files:
+                print('\t{}/{}'.format(file.parents[0], color(file.name, Colors.green)))
 
+            print('findings:')
+
+            for f in finds:
+                print(color(f.file_name, Colors.purple))
+                for line, [before, hit, after, hit_start, hit_end] in f.to_dict()['hits'].items():
+                    print('\t', color(line, Colors.red), ' : ', before, color(hit, Colors.green), after, sep='')
+                print()
+
+            print(color(f'search_in: {si}, returning: {ret}', Colors.yellow))
+            print('-'*200)
 
 # for file in [*dts_path_list, *include_file_list]:
 #    with open(file) as f:
