@@ -115,29 +115,31 @@ def get_all_includes(dts_file_path, include_dir, dts_path):
 
     return dts_path_list, include_path_list
 
-def get_repository(file:Path):
-    path = None
-    if file.is_file():
-        path = file.parent
-    else:
-        path = file
 
-    try:
-        git = Repo(path)
-        print('git found at:', path)
-    except InvalidGitRepositoryError:
-        try_level_above = True
-        while try_level_above:
-            path = path.resolve().parent
-            try:
-                git = Repo(path)
-                try_level_above = False
-                path = path.resolve()
-                print('git found at:', path.resolve())
-            except InvalidGitRepositoryError:
-                if str(path) == '/':
-                    raise LookupError(f'This directory {path} doesn\'t belong to a Git repository.')
-                try_level_above = True
+def get_repository(file: Path) -> Union[Repo, None]:
+    '''
+
+    :param file: path to a file or folder inside a git repository
+    :type file: Path
+    :return: a git repository object
+    :rtype: Union[Repo, None]
+    '''
+
+    if file.is_file():
+        path = file.parent.resolve()
+    else:
+        path = file.resolve()
+
+    git:Union[Repo, None] = None
+
+    while git == None:
+        try:
+            git = Repo(path)
+        except InvalidGitRepositoryError:
+            if str(path) == '/':
+                warnings.warn(f'This {"file" if file.is_file() else "directory"} {path} does not belong to a Git repository.', UserWarning)
+                break
+            path = path.parent
 
     return git
 
