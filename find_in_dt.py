@@ -202,11 +202,9 @@ def find_in_dt(dts_file_path: Path, search_string_list: List[str], search_in='al
     if not dts_file_path.exists():
         raise LookupError(f'device tree file does not exits: {dts_file_path}')
 
-    print(dts_file_path)
-
     repo = MyRepository(linux_git, arch)
     try:
-        print('active git branch:', color(repo.active_branch(), Colors.red), '\n')
+        repo.active_branch()
     except TypeError as e:
         print('active git branch:', color("no branch found", Colors.red), '\n')
     except Exception as e:
