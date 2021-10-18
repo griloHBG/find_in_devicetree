@@ -287,8 +287,10 @@ if __name__ == '__main__':
     dt_file = sys.argv[1]  # 'imx6dl-colibri-eval-v3.dts'
     search_string_list = sys.argv[2:]  # ['gpio2', 'MX6QDL_PAD_SD1_DAT']
 
-    search_in = ['only_headers', 'only_dts', 'all']
-    returning = ['only_files', 'only_matches', 'all']
+    #search_in = ['only_headers', 'only_dts', 'all']
+    #returning = ['only_files', 'only_matches', 'all']
+    search_in = ['all']
+    returning = ['all']
 
     for si in search_in:
         for ret in returning:
@@ -310,7 +312,7 @@ if __name__ == '__main__':
                 print()
 
             print(color(f'search_in: {si}, returning: {ret}', Colors.yellow))
-            print('-'*200)
+            print('-'*100)
 
 # for file in [*dts_path_list, *include_file_list]:
 #    with open(file) as f:
