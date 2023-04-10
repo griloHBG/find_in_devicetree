@@ -21,7 +21,7 @@ or
 #include "imx6dl.dtsi"
 
 '''
-
+import sys
 import re
 import warnings
 from pathlib import Path
