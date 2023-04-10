@@ -1,4 +1,4 @@
-#! /bin/python3
+#! /usr/bin/python3
 
 '''
 This script supports both arm and arm64 architectures.
